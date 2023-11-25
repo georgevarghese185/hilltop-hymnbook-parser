@@ -1,7 +1,6 @@
-Run this script with global NODE_PATH env variable pointing to the global npm dir.
+## Songbook sources:
 
-Did this so that I wouldn't have to add node_modules here and unnecessarily sync it to OneDrive
+**Celebration Hymnal:**
 
-```sh
-export NODE_PATH=$(npm root --quiet -g)
-```
+1. https://hymnary.org/hymnal/CEL1997?page=1
+2. https://digitalsongsandhymns.com/c/songbook/celebration-hymnal
