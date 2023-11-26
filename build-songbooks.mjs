@@ -113,10 +113,8 @@ const getCelebrationSongBook = async () => {
   }
 };
 
-const buildSongbookTextFile = () => {
-  const songs = JSON.parse(readFileSync("celebration.json").toString());
-
-  const songbookText = songs
+const buildSongbookText = (songs) => {
+  return songs
     .map((song) => {
       const lyrics = song.lyrics
         .reduce((lyrics, para, index, paras) => {
@@ -136,43 +134,105 @@ const buildSongbookTextFile = () => {
             .replace(/^(\d)+\.?/, "V$1.")
             .replace(/^Verse (\d)\s*\n/, "V$1. ")
             .replace(/^Verse\s*\n/, "")
-            .replace(/^Chorus:?\s*\n/, "C. ")
-            .replace(/^Refrain:(\n\n)?/, "C. ")
+            .replace(/^Chorus:?\s*\n+/, "C. ")
+            .replace(/^Refrain:?\s*\n+/, "C. ")
             .trim();
 
           return [...lyrics, para];
         }, [])
         .join("\n\n");
-      /*
-      Song #. Song Title
-      Copyright or Written by Author (optional)
-      Empty line
-      V#. Lyrics (where # is the verse number. Use “C.” for Chorus, instead of “V.”)
-      Lyrics
-      Lyrics
-      etc..
-      Empty line
-      Next verse #. Lyrics
-      Lyrics
-      Lyrics
-      etc..
-      Empty line
-      etc. (other lyrics)
-      Empty line
-      Copyright symbol: © (Alt+0169) (+ optional copyright text on the same line)
-      At least two empty lines
-      Next song
-    */
       return `Song ${song.title}\n\n` + lyrics + "\n\n©";
     })
     .join("\n\n\n");
+};
+
+const buildCelebrationSongbookTextFile = () => {
+  const songs = JSON.parse(readFileSync("celebration.json").toString());
+
+  const songbookText = buildSongbookText(songs);
 
   writeFileSync("celebration.txt", songbookText);
 };
 
-// const source2Songs = await getSource2();
-// console.log(await getSource1Song("1"));
-// getSource2Song(songs[0]);
+const buildRemembranceSongbookTextFile = () => {
+  const songs = JSON.parse(readFileSync("remembrance.json").toString());
+
+  const songbookText = buildSongbookText(songs);
+
+  writeFileSync("remembrance.txt", songbookText);
+};
+
+const getRemembranceSongs = async () => {
+  const resp = await axios.get("https://saintsserving.net/hymnbook.php?id=5");
+  const $ = cheerio.load(resp.data);
+
+  const tds = $("td.right");
+  const songs = [];
+
+  for (let td of tds) {
+    const songNumber = $(td).text();
+    const title = $(td).next().find("a").text();
+    const link =
+      "https://saintsserving.net/" + $(td).next().find("a").attr("href");
+
+    songs.push({ songNumber, title, link });
+  }
+
+  return songs;
+};
+
+const getRemembranceSong = async (song) => {
+  const resp = await axios.get(song.link);
+  const $ = cheerio.load(resp.data);
+
+  const title = `${song.songNumber}. ${$("#info h1").text()}`;
+  const para = $("#rightcol > p");
+  const lyrics = getParagraphs($, para).flatMap((p) => p.split(/\n\n{3,}/));
+
+  return {
+    songNumber: parseInt(song.songNumber),
+    title,
+    lyrics,
+  };
+};
+
+const getRemembranceSongBook = async () => {
+  let songList = await getRemembranceSongs();
+
+  let songs;
+
+  try {
+    songs = JSON.parse(readFileSync("remembrance.json").toString());
+  } catch (e) {
+    songs = [];
+  }
+
+  const lastSong = songs[songs.length - 1];
+  if (lastSong) {
+    songList = songList.slice(
+      songList.findIndex(
+        (s) => s.songNumber.toString() == lastSong.songNumber.toString()
+      ) + 1
+    );
+  }
+
+  for (const songToFetch of songList) {
+    try {
+      let song = await getRemembranceSong(songToFetch);
+
+      songs.push(song);
+
+      writeFileSync("remembrance.json", JSON.stringify(songs, null, 2));
+
+      console.log(`Got song ${songToFetch.songNumber}`);
+    } catch (e) {
+      console.error(`Failed to get Song ${songToFetch.songNumber}`);
+      console.error(e);
+    }
+  }
+};
 
 await getCelebrationSongBook();
-await buildSongbookTextFile();
+await buildCelebrationSongbookTextFile();
+await getRemembranceSongBook();
+await buildRemembranceSongbookTextFile();
